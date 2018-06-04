@@ -54,6 +54,8 @@ def sentence_selection(question,story):
         words_pos = nltk.pos_tag(words)
         words = list(filter(lambda x: x not in (stop_words + [':','`','’',',','.','!',"'",'"','?']), words))
         words = list(map(lambda x: lmtzr.lemmatize(x[0], pos=penn2wn(x[1])), words_pos))
+        
+        
         quant = len(set(words) & set(keywords))
         
         #chunk the data , if no match eliminate question. if there is a match +2 to quant
@@ -125,7 +127,6 @@ def wn_extract(question, sentence, sent_index):
                     return " ".join(dep["word"] for dep in deps)       
 
     return None
-
 
 def find_node(word, graph):
     ## replace with is , similar or equal.
@@ -480,15 +481,47 @@ def get_answer(question,story):
     
     qflags = utils.get_flags(question)
 
+    sch_flag = question['type'] == 'Sch' or question['type'] == 'Story | Sch'
 
-    if qflags['who'] and flag_500:
-        #answer = who_baseline(question,story)
-        story_text = utils.resolve_pronouns(story, type_='text')
+
+    if qflags['who']:
+        
+        #sentence selection:
+        #resolve anaphora if necesary
+        #similarity overlap , fallback to word overlap
+
+        story_text = utils.resolve_pronouns(story['text'])
         answer = story_text
-    elif qflags['who']:
-        story_text = utils.resolve_pronouns(story, type_='text')
-        answer = story_text 
+
+    elif qflags['what']:
+
+        # distinguish between verb and noun return type
+        # select sentence with similarity overlap as a first choice 
+        # failin onto word overlap of sch if possible
+
+        answer = 'next code'
+
+    elif qflags['when']:
+        answer = 'next code'
+    elif qflags['why']:
+        answer = 'next code'
+    elif qflags['where']:
+        #
+        answer = 'next code'
+    elif qflags['which']:
+        #question reformation
+        answer = 'next code'
+    elif qflags['did']:
+        #question reformation
+        answer = 'next code'
+    elif qflags['how']:
+        #resovle whether adj or verb gerund return type
+        answer = 'next code'
     else:
+        #dialogues questions
+        #seriously word overlap
+        #just get the sentence then question reformation
+        print(question['text'])
         answer = 'next code'
     
     return answer

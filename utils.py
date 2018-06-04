@@ -153,7 +153,7 @@ def most_freq(lst,meta_lst):
     else:
         return None          
     
-def resolve_pronouns(story, type_='text',index=None):
+def resolve_pronouns(story, type_='text'):
     '''
     the mc500 test data has unresolved anaphora ,  this attempts to replace all anaphora with
 
@@ -171,8 +171,7 @@ def resolve_pronouns(story, type_='text',index=None):
 
 
     if type_ == 'text':
-        answer = story['text']
-        answer_sents = nltk.sent_tokenize(answer)
+        answer_sents = nltk.sent_tokenize(story)
         answer_sents = [nltk.word_tokenize(i) for i in answer_sents]
         answer_pos_sents = [nltk.pos_tag(i) for i in answer_sents]
         
