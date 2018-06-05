@@ -13,7 +13,6 @@ import itertools
 import collections
 
 def consume(iterator, n=None):
-    "Advance the iterator n-steps ahead. If n is None, consume entirely."
     # Use functions that consume iterators at C speed.
     if n is None:
         # feed the entire iterator into a zero-length deque
@@ -34,25 +33,11 @@ def get_flags(question):
     return qdict
 
 
-def get_dep_words(dep_graph, list_=False):
 
-    ret = ''
-
-    if list_:
-
-        l = 0
-    
-    else:
-
-        l = 0
-
-
-    return ret
-
-
-def get_similarity(qkw,skw):
-    l = 0
-    return l
+def get_similarity(skw,qkw):
+    print('Qkw :',qkw,'Skw :',skw)
+    quant = len(set(skw) & set(qkw))
+    return quant
 
 prn_map = {'her':'female','hers':'female','she':'female','herself':'female',
             'him':'male','he':'male','his':'male','himself':'male','hisself':'male',
@@ -191,29 +176,33 @@ def resolve_pronouns(story, type_='text'):
             NNP = [] #he , she, the, him , her ,
             NN = [] #it
             for j in (range(backtrack,i) if backtrack != i else [0] ):
-                for ndx , tuple_ in enumerate(answer_pos_sents[j]):
+                ans_pos_sents_iter = answer_pos_sents[j].__iter__()
+                for ndx , tuple_ in enumerate(ans_pos_sents_iter):
                     
-                    skip, group = check_for_group(answer_pos_sents[j][ndx-1:])
+                    skip, group = check_for_group(answer_pos_sents[j][ndx:])
 
                     if group:
                         NNS.append(group)
                         doc_meta_NNS.append(group)
                         #print(group)
-                        consume(enumerate(answer_pos_sents[j]),skip+i)
+                        consume(ans_pos_sents_iter,i)
 
+                    if ndx != 0 and answer_pos_sents[j][ndx-1][1] == 'DT':
+                        dt = answer_pos_sents[j][ndx-1][0]+' '
+                    else:
+                        dt = ''   
 
                     if tuple_[1] == 'NNS':
-                        NNS.append(tuple_[0])
-                        doc_meta_NNS.append(tuple_[0])
+                        NNS.append(dt+tuple_[0])
+                        doc_meta_NNS.append(dt+tuple_[0])
 
                     elif tuple_[1] == 'NNP':
-                        NNP.append(tuple_[0])
-                        #print(tuple_[0])
-                        doc_meta_NNP.append(tuple_[0])
+                        NNP.append(dt+tuple_[0])
+                        doc_meta_NNP.append(dt+tuple_[0])
 
-                    elif tuple_[1] == 'NN':
-                        NN.append(tuple_[0])
-                        doc_meta_NN.append(tuple_[0])
+                    elif tuple_[1] == 'NN':    
+                        NN.append(dt+tuple_[0])
+                        doc_meta_NN.append(dt+tuple_[0])
 
             
             NNS_mf = most_freq(NNS,doc_meta_NNS)

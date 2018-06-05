@@ -10,7 +10,6 @@ import nltk
 import re
 import csv
 import utils
-
 ################ COLLAPSE ME I AM SETUP SCRIPT ###################
 
 def load_wordnet_ids(filename):
@@ -37,11 +36,16 @@ verb_ids = load_wordnet_ids("Wordnet_verbs.csv")
 
 ######################## HELPER FUNCTIONS ########################
 
-def sentence_selection(question,story):
+def sentence_selection(question,story,sch_flag=False):
     
     eligible_sents = []
 
-    sents = get_sents(story['text'])
+    if sch_flag:
+        text = story['sch']
+    else:
+        text = utils.resolve_pronouns(story['text'])
+
+    sents = get_sents(text)
 
     dep_sents = story['story_dep']
 
@@ -65,15 +69,17 @@ def sentence_selection(question,story):
 
     eligible_sents = sorted(eligible_sents, key=operator.itemgetter(0), reverse=True)
 
-    best = []
+    #best = []
 
-    best += [eligible_sents[0][1]]
+    index = eligible_sents[0][2]
 
-    best_dep = wn_extract(question,story,eligible_sents[0][2])
+    best = eligible_sents[0][1]
 
-    best = (best_dep if best_dep else best[0])
+    #best_dep = wn_extract(question,story,eligible_sents[0][2])
 
-    return best
+    #best = (best_dep if best_dep else best[0])
+
+    return best , index
 
 def wn_extract(question, sentence, sent_index):
 
@@ -392,7 +398,6 @@ def Which(question, question_sch):
 
     return  {'subject_pos':['NN'] , 'tree':nltk.ParentedTree.fromstring("(VP (*) (PP))")  ,'chunk_func':Which_chunk}
 
-
 def get_pattern(question,question_sch):
 
     case = {'who':Who,'what':What,'when':When,'where':Where,'why':Why,\
@@ -428,54 +433,46 @@ def get_keywords_pattern_tuple(question,question_sch):
 def select_best(chunk):
     return chunk[0]
 
-def who_baseline(question,story):
-
-    story_sents = nltk.sent_tokenize(story['text'])
+def who_baseline(question,story,sch_flag=False):
     
-    q_dep_words = utils.get_dep_words(question['dep'],list_=False)
-    '''
-    returns just a list of keywords based on the dependancy graph
-    '''
-    
-    s_dep_words_list = utils.get_dep_words(story['story_dep'],list_=True)
-    '''
-    returns a list of list of keywords based on the dependancy graph
-    '''
+    eligible_sents = []
 
-    sorter = []
+    if sch_flag:
+        text = story['sch']
+    else:
+        text = utils.resolve_pronouns(story['text'])
 
-    for i in range(len(s_dep_words_list)):
-        similarity_score = utils.get_similarity(q_dep_words, s_dep_words_list[i])
+    sents = get_sents(text)
 
-        #zip the score into a list with teh sentence index
-        tup = (similarity_score,i)
-        sorter.append(tup)
-    
-    sorter = sorted(sorter, key=operator.itemgetter(0), reverse=True)
+    dep_sents = story['story_dep']
 
-    best_index = sorter[0][1]
+    dep_quest = question['dep']
 
+    keywords , pattern = get_keywords_pattern_tuple(question['text'],question['par'])
 
-    return story_sents[best_index]
+    for i in range(len(sents)):
+        words = nltk.word_tokenize(sents[i])
+        words_pos = nltk.pos_tag(words)
+        words = list(filter(lambda x: x not in (stop_words + [':','`','’',',','.','!',"'",'"','?']), words))
+        words = list(map(lambda x: lmtzr.lemmatize(x[0], pos=penn2wn(x[1])), words_pos))
+             
+        quant = len(set(words) & set(keywords))
 
+        eligible_sents.append((quant,sents[i],i))
 
-
+    eligible_sents = sorted(eligible_sents, key=operator.itemgetter(0), reverse=True)
 
 
+    best = eligible_sents[0][1]
+
+    index = eligible_sents[0][2]
+
+    return best , index
 
 ##################################################################
 
-def get_eligible_chunks(question,story):
 
-    ##populate this function with other test for  chunk retrieval using different methods
-
-    ## constituency tree chunk retrieval metho
-
-    best = sentence_selection(question,story)
-    
-    return best
-
-def get_answer(question,story):
+def get_answer(question,story,sch_flag=False):
 
     flag_500 = story['sid'].startswith('mc500') # mctrain500 missing the sch data, changes pattern
     
@@ -490,8 +487,13 @@ def get_answer(question,story):
         #resolve anaphora if necesary
         #similarity overlap , fallback to word overlap
 
-        story_text = utils.resolve_pronouns(story['text'])
-        answer = story_text
+        #story_text , index = who_baseline(question,story,sch_flag=sch_flag)
+
+        #if index == -1:
+
+            #return story_text
+
+        answer = 'next code'#story_text
 
     elif qflags['what']:
 
@@ -499,15 +501,25 @@ def get_answer(question,story):
         # select sentence with similarity overlap as a first choice 
         # failin onto word overlap of sch if possible
 
-        answer = 'next code'
+        story_text , i = sentence_selection(question,story,sch_flag=sch_flag)
+
+        answer = story_text
 
     elif qflags['when']:
+
         answer = 'next code'
+
     elif qflags['why']:
+
+        #add why answer triggers to the question when looking for overlap
+
+
         answer = 'next code'
+
     elif qflags['where']:
-        #
+
         answer = 'next code'
+
     elif qflags['which']:
         #question reformation
         answer = 'next code'
