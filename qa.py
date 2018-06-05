@@ -439,8 +439,11 @@ def who_baseline(question,story,sch_flag=False):
 
     if sch_flag:
         text = story['sch']
+        text_actual = get_sents(story['sch'])
     else:
         text = utils.resolve_pronouns(story['text'])
+        text_actual = get_sents(story['text'])
+
 
     sents = get_sents(text)
 
@@ -458,7 +461,7 @@ def who_baseline(question,story,sch_flag=False):
              
         quant = len(set(words) & set(keywords))
 
-        eligible_sents.append((quant,sents[i],i))
+        eligible_sents.append((quant,text_actual[i],i))
 
     eligible_sents = sorted(eligible_sents, key=operator.itemgetter(0), reverse=True)
 
@@ -468,6 +471,75 @@ def who_baseline(question,story,sch_flag=False):
     index = eligible_sents[0][2]
 
     return best , index
+
+def what_baseline(question,story,return_type,sch_flag=False):
+    eligible_sents = []
+
+    if sch_flag:
+        text_actual = get_sents(story['sch'])
+        text = story['sch']
+    else:
+        text_actual = get_sents(story['text'])
+        text = utils.resolve_pronouns(story['text'])
+
+
+    sents = get_sents(text)
+
+    dep_sents = story['story_dep']
+
+    dep_quest = question['dep']
+
+    keywords , pattern = get_keywords_pattern_tuple(question['text'],question['par'])
+
+    if return_type == 'quotation':
+
+        for i in range(len(sents)):
+            words = nltk.word_tokenize(sents[i]) + ['said']
+            words_pos = nltk.pos_tag(words)
+            words = list(filter(lambda x: x not in (stop_words + [':','’',',','.','!',"'",'"','?']), words))
+            words = list(map(lambda x: lmtzr.lemmatize(x[0], pos=penn2wn(x[1])), words_pos))
+                 
+            quant = len(set(words) & set(keywords))
+
+            eligible_sents.append((quant,text_actual[i],i))
+
+    elif return_type == 'noun':
+        if 'day' in keywords and not 'time' in keywords:
+            keywords.remove('day')
+            keywords += ['Saturday','Sunday','Monday','Tuesday','Wednesday','Thursday','Friday']
+
+        for i in range(len(sents)):
+            words = nltk.word_tokenize(sents[i])
+            words_pos = nltk.pos_tag(words)
+            words = list(filter(lambda x: x not in (stop_words + [':','`','’',',','.','!',"'",'"','?']), words))
+            words = list(map(lambda x: lmtzr.lemmatize(x[0], pos=penn2wn(x[1])), words_pos))
+                 
+            quant = len(set(words) & set(keywords))
+
+            eligible_sents.append((quant,text_actual[i],i))
+    
+    elif return_type == 'verb':
+        for i in range(len(sents)):
+            words = nltk.word_tokenize(sents[i])
+            words_pos = nltk.pos_tag(words)
+            words = list(filter(lambda x: x not in (stop_words + [':','`','’',',','.','!',"'",'"','?']), words))
+            words = list(map(lambda x: lmtzr.lemmatize(x[0], pos=penn2wn(x[1])), words_pos))
+                 
+            quant = len(set(words) & set(keywords))
+
+            eligible_sents.append((quant,text_actual[i],i))
+    
+
+
+    eligible_sents = sorted(eligible_sents, key=operator.itemgetter(0), reverse=True)
+
+
+    best = eligible_sents[0][1]
+
+    index = eligible_sents[0][2]
+
+    return best , index
+
 
 ##################################################################
 
@@ -487,23 +559,25 @@ def get_answer(question,story,sch_flag=False):
         #resolve anaphora if necesary
         #similarity overlap , fallback to word overlap
 
-        #story_text , index = who_baseline(question,story,sch_flag=sch_flag)
+        story_text , index = who_baseline(question,story,sch_flag=sch_flag)
 
         #if index == -1:
 
             #return story_text
 
-        answer = 'next code'#story_text
+        answer = story_text
 
     elif qflags['what']:
 
-        # distinguish between verb and noun return type
+        # distinguish between verb and noun and quote return type
         # select sentence with similarity overlap as a first choice 
-        # failin onto word overlap of sch if possible
+        # failing onto word overlap of sch if possible
 
-        story_text , i = sentence_selection(question,story,sch_flag=sch_flag)
+        return_type = utils.return_type(question)
 
-        answer = story_text
+        story_text , i = what_baseline(question,story,return_type,sch_flag=False)
+
+        answer =story_text
 
     elif qflags['when']:
 
@@ -512,7 +586,6 @@ def get_answer(question,story,sch_flag=False):
     elif qflags['why']:
 
         #add why answer triggers to the question when looking for overlap
-
 
         answer = 'next code'
 

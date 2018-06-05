@@ -12,6 +12,23 @@ import math
 import itertools
 import collections
 
+def load_wordnet_ids(filename):
+    file = open(filename, 'r')
+    if "noun" in filename: type_ = "noun"
+    else: type_ = "verb"
+    csvreader = csv.DictReader(file, delimiter=",", quotechar='"')
+    word_ids = defaultdict()
+    for line in csvreader:
+        word_ids[line['synset_id']] = {'synset_offset': line['synset_offset'], \
+                                        'story_'+type_: line['story_'+type_], \
+                                        'stories': line['stories']}
+    return word_ids
+
+noun_ids = load_wordnet_ids("Wordnet_nouns.csv")
+
+verb_ids = load_wordnet_ids("Wordnet_verbs.csv")
+
+
 def consume(iterator, n=None):
     # Use functions that consume iterators at C speed.
     if n is None:
@@ -32,10 +49,23 @@ def get_flags(question):
     qdict[q] = True
     return qdict
 
+def return_type(what_question):
+    #look for keywords associated with
+    #either verb return or noun return
+    what_q_text = what_question['text']
+    what_q_text = nltk.word_tokenize(what_q_text)[1:]
+    for i in ['do','doing','happen','happened']:
+        if i in what_q_text:
+            return 'verb'
+    
+    if 'say' in what_q_text:
+        return 'quotation'
 
+    return 'noun'
 
-def get_similarity(skw,qkw):
+def get_similarity(skw,qkw,sid,qid):
     print('Qkw :',qkw,'Skw :',skw)
+
     quant = len(set(skw) & set(qkw))
     return quant
 
@@ -209,8 +239,6 @@ def resolve_pronouns(story, type_='text'):
             NN_mf = most_freq(NN,doc_meta_NN)
             NNP_mf = most_freq(NNP,doc_meta_NNP)
             
-
-
             
             for index in range(len(answer_pos_sents[i])):
                 if  answer_pos_sents[i][index][1] in ['PRP$','PRP']:
@@ -245,7 +273,15 @@ def resolve_pronouns(story, type_='text'):
                                                       answer_pos_sents[i][index][1])
             
     ans = ''
+
+
     for i in answer_pos_sents:
         ans += ' '.join( word[0] for word in i) + ' '
+
+    ans = ans.replace('! ! !',"!!!")
+    ans = ans.replace('! !',"!!")
+    ans = ans.replace('? ? ?',"???")
+    ans = ans.replace('? ?',"??")
+
             
     return ans
