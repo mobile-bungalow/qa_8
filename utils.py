@@ -63,11 +63,82 @@ def return_type(what_question):
 
     return 'noun'
 
+
 def get_similarity(skw,qkw,sid,qid):
-    print('Qkw :',qkw,'Skw :',skw)
+    #print('Qkw :',qkw,'Skw :',skw)
+
+    #loop for each qkw:
+        #find wordsens in csv's
+        # test if that even happens for most cases just print hit or miss
+
+    bis = kw_to_wn_bi(qkw)
+    tris = kw_to_wn_tri(qkw)
+    senses = []
+    senses += bis
+    senses += tris
+    
+    for word in qkw:
+        hit = 0
+        syn_list = wn.synsets(word)
+        if len(syn_list) == 1 or len(syn_list) == 2:
+            senses += [syn_list[0]]
+            syn_list = []
+            hit = 1
+        for synset in syn_list:
+            hit = 0
+            if synset.name() in noun_ids and (sid+'.vgl') in noun_ids[synset.name()]['stories']:
+                senses.append(synset)
+                hit += 1
+            elif  synset.name() in verb_ids and (sid+'.vgl') in verb_ids[synset.name()]['stories']:
+                senses.append( synset)
+                hit += 1
+    
+    if len(senses) == 0:
+        return None
+
+    bis = kw_to_wn_bi(skw)
+    tris = kw_to_wn_tri(skw)
+    s_senses = []
+    s_senses += bis
+    s_senses += tris
+    
+    for word in qkw:
+        hit = 0
+        syn_list = wn.synsets(word)
+        if len(syn_list) == 1 or len(syn_list) == 2:
+            s_senses += [syn_list[0]]
+            syn_list = []
+            hit = 1
+        
+        for synset in syn_list:
+            hit = 0
+            if synset.name() in noun_ids and (sid+'.vgl') in noun_ids[synset.name()]['stories']:
+                s_senses.append(synset)
+                hit += 1
+            elif  synset.name() in verb_ids and (sid+'.vgl') in verb_ids[synset.name()]['stories']:
+                s_senses.append( synset)
+                hit += 1
+    
+    if len(s_senses) == 0:
+        return None
+
 
     quant = len(set(skw) & set(qkw))
-    return quant
+    mod = float(0)
+    for q_set in senses:
+        l = [wn.path_similarity(i,q_set) for i in s_senses]
+        #lt =  [(wn.path_similarity(i,q_set),i,q_set) for i in s_senses]
+        #if lt[0]
+        #print(lt)
+        if None not in l:
+            maximum = max(l)
+        else:
+            maximum = float(0)
+        mod += maximum
+        maximum = 0.0
+
+    #print(skw, "     , qkw :", qkw ,'    :    ',mod)
+    return mod
 
 prn_map = {'her':'female','hers':'female','she':'female','herself':'female',
             'him':'male','he':'male','his':'male','himself':'male','hisself':'male',
@@ -107,6 +178,23 @@ grammar =   """
             """
 
 chunker = nltk.RegexpParser(grammar)
+
+def kw_to_wn_bi(keywords):
+        temp = []
+        if len(keywords) > 2:
+            temp_ = []
+            for i in range(1,len(keywords)):
+                temp += wn.synsets(keywords[i-1]+'_'+keywords[i])
+
+        return temp
+    
+def kw_to_wn_tri(keywords):
+    temp = []
+    if len(keywords) > 3:
+        temp_ = []
+        for i in range(1,len(keywords)):
+            temp += wn.synsets(keywords[i-2]+'_'+keywords[i-1]+'_'+keywords[i])
+    return temp
 
 def check_for_group(slice_):
     #takes tagges slive of a sentence

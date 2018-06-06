@@ -26,7 +26,7 @@ def load_wordnet_ids(filename):
 
 ####################### Global VARIABLES #########################
 
-stop_words = nltk.corpus.stopwords.words("english") 
+stop_words = nltk.corpus.stopwords.words("english")
 
 lmtzr = WordNetLemmatizer()
 
@@ -47,11 +47,9 @@ def sentence_selection(question,story,sch_flag=False):
 
     sents = get_sents(text)
 
-    dep_sents = story['story_dep']
-
-    dep_quest = question['dep']
-
     keywords , pattern = get_keywords_pattern_tuple(question['text'],question['par'])
+
+    keywords +=['Saturday','Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','at','during','while','from','to']
 
     for i in range(len(sents)):
         words = nltk.word_tokenize(sents[i])
@@ -81,7 +79,7 @@ def sentence_selection(question,story,sch_flag=False):
 
     return best , index
 
-def wn_extract(question, sentence, sent_index):
+def wn_extract(question, sentence, sent_index, sch_flag = False):
 
     qgraph = question['dep']
 
@@ -89,7 +87,13 @@ def wn_extract(question, sentence, sent_index):
 
     qnode = find_node(quest_type, qgraph)
 
+    if sch_flag:
+        dep = sentence['sch_dep']
+    else:
+        dep = sentence['story_dep']
+
     #generalized way to extract plausible answer types from  the graph
+    
     #currently probably a problem
 
     if qnode:
@@ -106,18 +110,18 @@ def wn_extract(question, sentence, sent_index):
     #qword = [lmtzr.lemmatize(qword,qpos).lower()]
 
     filename = question['sid'] + '.vgl'
-    snode = find_similar(qword,qmain['tag'],sentence['story_dep'][sent_index],filename)
+    snode = find_similar(qword,qmain['tag'],dep[sent_index],filename)
     
     sent_list = nltk.sent_tokenize(sentence['text'])
 
     if snode:
-        sgraph = sentence['story_dep'][sent_index]
+        sgraph = dep[sent_index]
     else:
         #print('Stage 1 FALLBBACK , question' , question['text'] , 'For word :' , qword , ' missed in ', sent_list[sent_index]) 
-        for i in range(len(sentence['story_dep'])):
-            snode = find_similar(qword,qmain['tag'], sentence['story_dep'][i],filename)
+        for i in range(len(dep)):
+            snode = find_similar(qword,qmain['tag'], dep[i],filename)
             if snode:
-                sgraph = sentence['story_dep'][i]
+                sgraph = dep[i]
                 break
 
     if snode: 
@@ -130,7 +134,7 @@ def wn_extract(question, sentence, sent_index):
                     deps = get_dependents(node, sgraph)
                     deps = sorted(deps+[node], key=operator.itemgetter("address"))
                     #print( 'ANSWER : ', question['text']," : ", " ".join(dep["word"] for dep in deps))
-                    return " ".join(dep["word"] for dep in deps)       
+                    return " ".join(depo["word"] for depo in deps)       
 
     return None
 
@@ -218,7 +222,6 @@ def penn2wn(treebank_tag):
         return wn.NOUN
         #erroneus but wn corrects as necessary lol.
 
-
 #converts penn tree bank to WN style pos tags
 
 def pattern_matcher(pattern, tree):
@@ -227,7 +230,6 @@ def pattern_matcher(pattern, tree):
         if node is not None:
             return node
     return None
-
 
 def chunk_matches(pattern,root):
     
@@ -288,6 +290,8 @@ why_filter = set(['so','to', 'because', 'in', 'due', 'for'])
 
 
 ## further specify the grammar of each language ##
+## thsi model is deprecated, i was goign to fiddle with the grammar for each
+## question until they all returned soemthign new and good
 
 def Who(question,question_sch):
 
@@ -343,8 +347,7 @@ def Where(question,question_sch):
         locations = []
         for subtree in text.subtrees():
             if subtree.label() == 'PP':
-                if subtree[0][0] in ppl_filter:
-                    locations.append(subtree)
+                locations.append(subtree)
         return locations
 
         
@@ -398,6 +401,14 @@ def Which(question, question_sch):
 
     return  {'subject_pos':['NN'] , 'tree':nltk.ParentedTree.fromstring("(VP (*) (PP))")  ,'chunk_func':Which_chunk}
 
+def default_chunk(text):
+    locations = []
+    for subtree in text.subtrees():
+        if subtree.label() == 'PP':
+            if subtree[0][0] in ppl_filter:
+                locations.append(subtree)
+    return locations
+
 def get_pattern(question,question_sch):
 
     case = {'who':Who,'what':What,'when':When,'where':Where,'why':Why,\
@@ -406,13 +417,24 @@ def get_pattern(question,question_sch):
 
     wh_question = nltk.word_tokenize(question)[0].lower()
 
-    pattern_dict = case[wh_question](question,question_sch)
+    try:
+        pattern_dict = case[wh_question](question,question_sch)
+    except KeyError:
+        pattern_dict = {'subject_pos':['NN'] , 'tree':nltk.ParentedTree.fromstring("(VP (*) (PP))")  ,'chunk_func':default_chunk}
 
     return pattern_dict
 
 def get_keywords_pattern_tuple(question,question_sch):
     
     q_words = nltk.word_tokenize(question)
+    rep_list = []
+    for i in range(len(q_words)):
+        if '/' in q_words[i]:
+            rep_list += [q_words[i]]
+    for i in rep_list:
+        q_words[q_words.index(i):q_words.index(i)+1] =  (z for z in i.split('/'))
+
+            
     q_words = q_words[1:]
     pattern = get_pattern(question,question_sch)
     keywords = list(filter(lambda x: x not in (stop_words + ['’',',','.','!',"'",'"','?']), q_words))
@@ -433,6 +455,7 @@ def get_keywords_pattern_tuple(question,question_sch):
 def select_best(chunk):
     return chunk[0]
 
+#88%
 def who_baseline(question,story,sch_flag=False):
     
     eligible_sents = []
@@ -441,15 +464,16 @@ def who_baseline(question,story,sch_flag=False):
         text = story['sch']
         text_actual = get_sents(story['sch'])
     else:
-        text = utils.resolve_pronouns(story['text'])
+        text = story['text']#utils.resolve_pronouns(story['text'])
         text_actual = get_sents(story['text'])
 
 
     sents = get_sents(text)
 
-    dep_sents = story['story_dep']
-
-    dep_quest = question['dep']
+    if len(sents) != len(text_actual):
+        print(len(sents),len(text_actual))
+        print(sents)
+        print(text_actual)
 
     keywords , pattern = get_keywords_pattern_tuple(question['text'],question['par'])
 
@@ -457,9 +481,11 @@ def who_baseline(question,story,sch_flag=False):
         words = nltk.word_tokenize(sents[i])
         words_pos = nltk.pos_tag(words)
         words = list(filter(lambda x: x not in (stop_words + [':','`','’',',','.','!',"'",'"','?']), words))
+
         words = list(map(lambda x: lmtzr.lemmatize(x[0], pos=penn2wn(x[1])), words_pos))
              
         quant = len(set(words) & set(keywords))
+
 
         eligible_sents.append((quant,text_actual[i],i))
 
@@ -472,8 +498,11 @@ def who_baseline(question,story,sch_flag=False):
 
     return best , index
 
+
+#62%
 def what_baseline(question,story,return_type,sch_flag=False):
     eligible_sents = []
+
 
     if sch_flag:
         text_actual = get_sents(story['sch'])
@@ -482,54 +511,36 @@ def what_baseline(question,story,return_type,sch_flag=False):
         text_actual = get_sents(story['text'])
         text = utils.resolve_pronouns(story['text'])
 
-
     sents = get_sents(text)
 
-    dep_sents = story['story_dep']
-
-    dep_quest = question['dep']
+    if len(sents) != len(text_actual):
+        print(len(sents),len(text_actual))
+        print(sents)
+        print(text_actual)
 
     keywords , pattern = get_keywords_pattern_tuple(question['text'],question['par'])
 
+    kw_mod = []
+    
     if return_type == 'quotation':
+        kw_mod = ['said']
+    if return_type == 'verb':
+        kw_mod = []
+    if return_type == 'noun':
+        if 'day' in question['text']:
+            kw_mod += ['Saturday','Sunday','Monday','Tuesday','Wednesday','Thursday','Friday']
 
-        for i in range(len(sents)):
-            words = nltk.word_tokenize(sents[i]) + ['said']
-            words_pos = nltk.pos_tag(words)
-            words = list(filter(lambda x: x not in (stop_words + [':','’',',','.','!',"'",'"','?']), words))
-            words = list(map(lambda x: lmtzr.lemmatize(x[0], pos=penn2wn(x[1])), words_pos))
-                 
-            quant = len(set(words) & set(keywords))
+    keywords += kw_mod
 
-            eligible_sents.append((quant,text_actual[i],i))
-
-    elif return_type == 'noun':
-        if 'day' in keywords and not 'time' in keywords:
-            keywords.remove('day')
-            keywords += ['Saturday','Sunday','Monday','Tuesday','Wednesday','Thursday','Friday']
-
-        for i in range(len(sents)):
-            words = nltk.word_tokenize(sents[i])
-            words_pos = nltk.pos_tag(words)
-            words = list(filter(lambda x: x not in (stop_words + [':','`','’',',','.','!',"'",'"','?']), words))
-            words = list(map(lambda x: lmtzr.lemmatize(x[0], pos=penn2wn(x[1])), words_pos))
-                 
-            quant = len(set(words) & set(keywords))
-
-            eligible_sents.append((quant,text_actual[i],i))
-    
-    elif return_type == 'verb':
-        for i in range(len(sents)):
-            words = nltk.word_tokenize(sents[i])
-            words_pos = nltk.pos_tag(words)
-            words = list(filter(lambda x: x not in (stop_words + [':','`','’',',','.','!',"'",'"','?']), words))
-            words = list(map(lambda x: lmtzr.lemmatize(x[0], pos=penn2wn(x[1])), words_pos))
-                 
-            quant = len(set(words) & set(keywords))
-
-            eligible_sents.append((quant,text_actual[i],i))
-    
-
+    for i in range(len(sents)):
+        words = nltk.word_tokenize(sents[i])
+        words_pos = nltk.pos_tag(words)
+        words = list(filter(lambda x: x not in (stop_words + [':','’',',','.','!',"'",'"','?']), words))
+        words = list(map(lambda x: lmtzr.lemmatize(x[0], pos=penn2wn(x[1])), words_pos))
+                
+        quant = len(set(words) & set(keywords))
+        
+        eligible_sents.append((quant,text_actual[i],i))
 
     eligible_sents = sorted(eligible_sents, key=operator.itemgetter(0), reverse=True)
 
@@ -540,6 +551,45 @@ def what_baseline(question,story,return_type,sch_flag=False):
 
     return best , index
 
+#90% up from 66 baseline , also used for why , at 79.5%
+def when_baseline(question,story,kw_adds,sch_flag=False):
+    eligible_sents = []
+
+    if sch_flag:
+        text = story['sch']
+        text_actual = get_sents(story['sch'])
+    else:
+        text = utils.resolve_pronouns(story['text'])
+        text_actual = get_sents(story['text'])
+
+    sents = get_sents(text)
+
+    if len(sents) != len(text_actual):
+        print(len(sents),len(text_actual))
+        print(sents)
+        print(text_actual)
+
+    keywords , pattern = get_keywords_pattern_tuple(question['text'],question['par'])
+
+    keywords += kw_adds
+
+    for i in range(len(sents)):
+        words = nltk.word_tokenize(sents[i])
+        words_pos = nltk.pos_tag(words)
+        words = list(filter(lambda x: x not in (stop_words + [':','`','’',',','.','!',"'",'"','?']), words))
+
+        words = list(map(lambda x: lmtzr.lemmatize(x[0], pos=penn2wn(x[1])), words_pos))
+             
+        quant = len(set(words) & set(keywords))
+
+        eligible_sents.append((quant,text_actual[i],i))
+
+    eligible_sents = sorted(eligible_sents, key=operator.itemgetter(0), reverse=True)
+    best = eligible_sents[0][1]
+    index = eligible_sents[0][2]
+    return best , index
+
+#where baseline 68%
 
 ##################################################################
 
@@ -559,13 +609,8 @@ def get_answer(question,story,sch_flag=False):
         #resolve anaphora if necesary
         #similarity overlap , fallback to word overlap
 
-        story_text , index = who_baseline(question,story,sch_flag=sch_flag)
+        answer , i = who_baseline(question,story,sch_flag=sch_flag)
 
-        #if index == -1:
-
-            #return story_text
-
-        answer = story_text
 
     elif qflags['what']:
 
@@ -575,39 +620,68 @@ def get_answer(question,story,sch_flag=False):
 
         return_type = utils.return_type(question)
 
-        story_text , i = what_baseline(question,story,return_type,sch_flag=False)
-
-        answer =story_text
+        answer , i = what_baseline(question,story,return_type,sch_flag=False)
 
     elif qflags['when']:
 
-        answer = 'next code'
+        kw_adds = ['Saturday','Sunday','Monday','Tuesday','Wednesday','Thursday','Friday']
+        kw_adds += pp_filter
+        answer , i = when_baseline(question,story,kw_adds,sch_flag,)
 
     elif qflags['why']:
 
         #add why answer triggers to the question when looking for overlap
 
-        answer = 'next code'
+        kw_adds = why_filter
+        answer , i = when_baseline(question,story,kw_adds,sch_flag)
+        
+        #answer = 'next code'
 
     elif qflags['where']:
 
-        answer = 'next code'
+        kw_adds = ['in','where','at','front','back','outside','inside']
+        answer , i = when_baseline(question,story,kw_adds,sch_flag)
+        best_dep = wn_extract(question,story,i,sch_flag=sch_flag)
+        answer = (best_dep if best_dep else answer)
+        #answer = 'next code'
 
     elif qflags['which']:
         #question reformation
-        answer = 'next code'
+        kw_adds = []
+        answer , i = when_baseline(question,story,kw_adds,sch_flag)
+        #best_dep = wn_extract(question,story,i)
+        #answer = (best_dep if best_dep else answer)
+
     elif qflags['did']:
         #question reformation
-        answer = 'next code'
+        #simple overlap , look for 'nt in answer, make a score threshold
+        #based on the number of key words
+
+        kw_adds = []
+        answer , i = when_baseline(question,story,kw_adds,sch_flag)
+        #best_dep = wn_extract(question,story,i)
+        #answer = (best_dep if best_dep else answer)
+        #answer = 'yes' if "'nt" not in answer else 'no' 
+        
+        #answer = 'next code'
     elif qflags['how']:
         #resovle whether adj or verb gerund return type
-        answer = 'next code'
+
+        kw_adds = []
+        answer , i = when_baseline(question,story,kw_adds,sch_flag)
+        #best_dep = wn_extract(question,story,i)
+        #answer = (best_dep if best_dep else answer)
+        #answer = 'next code'
     else:
         #dialogues questions
         #seriously word overlap
         #just get the sentence then question reformation
         print(question['text'])
-        answer = 'next code'
+        kw_adds = []
+        answer , i = when_baseline(question,story,kw_adds,sch_flag)
+        #best_dep = wn_extract(question,story,i)
+        #answer = (best_dep if best_dep else answer)
+        #answer = 'next code'
     
     return answer
 
