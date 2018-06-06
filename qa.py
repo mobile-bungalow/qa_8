@@ -87,13 +87,20 @@ def wn_extract(question, sentence, sent_index, sch_flag = False):
 
     qnode = find_node(quest_type, qgraph)
 
+    if not qnode:
+        qnode = find_main(qgraph)
+
     if sch_flag:
         dep = sentence['sch_dep']
     else:
         dep = sentence['story_dep']
 
+    dep_set = set(i for i in find_main(dep[sent_index])['deps'].keys())
+    q_dep_set = set([i for i in qnode['deps']] + [qnode['rel']]  )
+    union = q_dep_set & dep_set
+    #print(q_dep_set , '  DEP SET : ', dep_set , 'Intersect   :  ', q_dep_set & dep_set)
+
     #generalized way to extract plausible answer types from  the graph
-    
     #currently probably a problem
 
     if qnode:
@@ -103,6 +110,9 @@ def wn_extract(question, sentence, sent_index, sch_flag = False):
     else:
         answer_type = ["nsubj"]
 
+    if 'punct' in answer_type:
+        answer_type.remove('punct')
+
     qmain = find_main(qgraph)
 
     qword = qmain["word"]
@@ -110,7 +120,7 @@ def wn_extract(question, sentence, sent_index, sch_flag = False):
     #qword = [lmtzr.lemmatize(qword,qpos).lower()]
 
     filename = question['sid'] + '.vgl'
-    snode = find_similar(qword,qmain['tag'],dep[sent_index],filename)
+    snode = find_similar(qword, qmain['tag'], dep[sent_index], filename)
     
     sent_list = nltk.sent_tokenize(sentence['text'])
 
@@ -133,7 +143,11 @@ def wn_extract(question, sentence, sent_index, sch_flag = False):
                 if node['rel'] in answer_type:
                     deps = get_dependents(node, sgraph)
                     deps = sorted(deps+[node], key=operator.itemgetter("address"))
-                    #print( 'ANSWER : ', question['text']," : ", " ".join(dep["word"] for dep in deps))
+                    print('\n')
+                    print( 'ANSWER : ', question['text']," : ", " ".join(dep["word"] for dep in deps))
+                    print('ANS Q REL UNION :' ,  q_dep_set & dep_set )
+                    print('REL : ', node['rel'] , 'ANSWER TYPE :' , answer_type)
+                    print('\n')
                     return " ".join(depo["word"] for depo in deps)       
 
     return None
@@ -461,19 +475,14 @@ def who_baseline(question,story,sch_flag=False):
     eligible_sents = []
 
     if sch_flag:
-        text = story['sch']
-        text_actual = get_sents(story['sch'])
+        text = utils.resolve_pronouns(story['sch'])
+        text_actual = nltk.sent_tokenize(story['sch'])
     else:
-        text = story['text']#utils.resolve_pronouns(story['text'])
-        text_actual = get_sents(story['text'])
+        text = utils.resolve_pronouns(story['text'])
+        text_actual = nltk.sent_tokenize(story['text'])
 
 
     sents = get_sents(text)
-
-    if len(sents) != len(text_actual):
-        print(len(sents),len(text_actual))
-        print(sents)
-        print(text_actual)
 
     keywords , pattern = get_keywords_pattern_tuple(question['text'],question['par'])
 
@@ -499,24 +508,19 @@ def who_baseline(question,story,sch_flag=False):
     return best , index
 
 
-#62%
+#77 21 30
 def what_baseline(question,story,return_type,sch_flag=False):
     eligible_sents = []
 
 
     if sch_flag:
         text_actual = get_sents(story['sch'])
-        text = story['sch']
+        text = utils.resolve_pronouns(story['sch'])
     else:
         text_actual = get_sents(story['text'])
         text = utils.resolve_pronouns(story['text'])
 
     sents = get_sents(text)
-
-    if len(sents) != len(text_actual):
-        print(len(sents),len(text_actual))
-        print(sents)
-        print(text_actual)
 
     keywords , pattern = get_keywords_pattern_tuple(question['text'],question['par'])
 
@@ -532,10 +536,13 @@ def what_baseline(question,story,return_type,sch_flag=False):
 
     keywords += kw_mod
 
+    rem_list = ['in','he','she','him','her','before','after']
+    stop_words_cust = [i if i not in rem_list else '' for i in stop_words]
+
     for i in range(len(sents)):
         words = nltk.word_tokenize(sents[i])
         words_pos = nltk.pos_tag(words)
-        words = list(filter(lambda x: x not in (stop_words + [':','’',',','.','!',"'",'"','?']), words))
+        words = list(filter(lambda x: x not in (stop_words_cust + [':','’',',','.','!',"'",'"','?']), words))
         words = list(map(lambda x: lmtzr.lemmatize(x[0], pos=penn2wn(x[1])), words_pos))
                 
         quant = len(set(words) & set(keywords))
@@ -549,7 +556,7 @@ def what_baseline(question,story,return_type,sch_flag=False):
 
     index = eligible_sents[0][2]
 
-    return best , index
+    return best, index
 
 #90% up from 66 baseline , also used for why , at 79.5%
 def when_baseline(question,story,kw_adds,sch_flag=False):
@@ -600,7 +607,7 @@ def get_answer(question,story,sch_flag=False):
     
     qflags = utils.get_flags(question)
 
-    sch_flag = question['type'] == 'Sch' or question['type'] == 'Story | Sch'
+    sch_flag = 'Sch' in question['type']
 
 
     if qflags['who']:
@@ -609,7 +616,8 @@ def get_answer(question,story,sch_flag=False):
         #resolve anaphora if necesary
         #similarity overlap , fallback to word overlap
 
-        answer , i = who_baseline(question,story,sch_flag=sch_flag)
+        #answer , i = who_baseline(question,story,sch_flag=sch_flag)
+        answer = 'next code'
 
 
     elif qflags['what']:
@@ -620,37 +628,41 @@ def get_answer(question,story,sch_flag=False):
 
         return_type = utils.return_type(question)
 
-        answer , i = what_baseline(question,story,return_type,sch_flag=False)
+        answer , i = what_baseline(question,story,return_type,sch_flag=sch_flag)
+        best_dep = wn_extract(question,story,i,sch_flag=sch_flag)
+        answer = (best_dep if best_dep else answer)
 
     elif qflags['when']:
 
         kw_adds = ['Saturday','Sunday','Monday','Tuesday','Wednesday','Thursday','Friday']
         kw_adds += pp_filter
-        answer , i = when_baseline(question,story,kw_adds,sch_flag,)
+        #answer , i = when_baseline(question,story,kw_adds,sch_flag,)
+        answer = 'next code'
 
     elif qflags['why']:
 
         #add why answer triggers to the question when looking for overlap
 
         kw_adds = why_filter
-        answer , i = when_baseline(question,story,kw_adds,sch_flag)
+        #answer , i = when_baseline(question,story,kw_adds,sch_flag)
         
-        #answer = 'next code'
+        answer = 'next code'
 
     elif qflags['where']:
 
         kw_adds = ['in','where','at','front','back','outside','inside']
-        answer , i = when_baseline(question,story,kw_adds,sch_flag)
-        best_dep = wn_extract(question,story,i,sch_flag=sch_flag)
-        answer = (best_dep if best_dep else answer)
-        #answer = 'next code'
+        #answer , i = when_baseline(question,story,kw_adds,sch_flag=sch_flag)
+        #best_dep = wn_extract(question,story,i,sch_flag=sch_flag)
+        #answer = (best_dep if best_dep else answer)
+        answer = 'next code'
 
     elif qflags['which']:
         #question reformation
         kw_adds = []
-        answer , i = when_baseline(question,story,kw_adds,sch_flag)
+        #answer , i = when_baseline(question,story,kw_adds,sch_flag)
         #best_dep = wn_extract(question,story,i)
         #answer = (best_dep if best_dep else answer)
+        answer = 'next code'
 
     elif qflags['did']:
         #question reformation
@@ -658,7 +670,8 @@ def get_answer(question,story,sch_flag=False):
         #based on the number of key words
 
         kw_adds = []
-        answer , i = when_baseline(question,story,kw_adds,sch_flag)
+        #answer , i = when_baseline(question,story,kw_adds,sch_flag=sch_flag)
+        answer = 'next code'
         #best_dep = wn_extract(question,story,i)
         #answer = (best_dep if best_dep else answer)
         #answer = 'yes' if "'nt" not in answer else 'no' 
@@ -668,7 +681,8 @@ def get_answer(question,story,sch_flag=False):
         #resovle whether adj or verb gerund return type
 
         kw_adds = []
-        answer , i = when_baseline(question,story,kw_adds,sch_flag)
+        #answer , i = when_baseline(question,story,kw_adds,sch_flag=sch_flag)
+        answer = 'next code'
         #best_dep = wn_extract(question,story,i)
         #answer = (best_dep if best_dep else answer)
         #answer = 'next code'
@@ -678,7 +692,8 @@ def get_answer(question,story,sch_flag=False):
         #just get the sentence then question reformation
         print(question['text'])
         kw_adds = []
-        answer , i = when_baseline(question,story,kw_adds,sch_flag)
+        #answer , i = when_baseline(question,story,kw_adds,sch_flag=sch_flag)
+        answer = 'next code'
         #best_dep = wn_extract(question,story,i)
         #answer = (best_dep if best_dep else answer)
         #answer = 'next code'

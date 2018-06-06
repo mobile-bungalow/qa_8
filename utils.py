@@ -272,93 +272,91 @@ def resolve_pronouns(story, type_='text'):
 
     prev_dict = {'male':[],'female':[],'neutral_or_plural':[]}
 
+    answer_sents = nltk.sent_tokenize(story)
+    answer_sents = [nltk.word_tokenize(i) for i in answer_sents]
+    answer_pos_sents = [nltk.pos_tag(i) for i in answer_sents]
+    
+    doc_meta_NNS = [] #they, them
+    doc_meta_NNP = [] #he , she, the, him , her , 
+    doc_meta_NN = [] #it
 
-    if type_ == 'text':
-        answer_sents = nltk.sent_tokenize(story)
-        answer_sents = [nltk.word_tokenize(i) for i in answer_sents]
-        answer_pos_sents = [nltk.pos_tag(i) for i in answer_sents]
-        
-        doc_meta_NNS = [] #they, them
-        doc_meta_NNP = [] #he , she, the, him , her , 
-        doc_meta_NN = [] #it
-
-        #POS correction, some Nouns are not properly labeled
-        for j in range(len(answer_pos_sents)):
-            for i, word in enumerate(answer_pos_sents[j]):
-                if word[0].istitle() and word[1] in ['MD','JJ','VB']:
-                    answer_pos_sents[j][i] = (word[0],'NNP')
+    #POS correction, some Nouns are not properly labeled
+    for j in range(len(answer_pos_sents)):
+        for i, word in enumerate(answer_pos_sents[j]):
+            if word[0].istitle() and word[1] in ['MD','JJ','VB']:
+                answer_pos_sents[j][i] = (word[0],'NNP')
+            
+    for i in range(len(answer_pos_sents)):
+        backtrack = i - 2 if i >= 2 else 0
+        NNS = [] #they, them
+        NNP = [] #he , she, the, him , her ,
+        NN = [] #it
+        for j in (range(backtrack,i) if backtrack != i else [0] ):
+            ans_pos_sents_iter = answer_pos_sents[j].__iter__()
+            for ndx , tuple_ in enumerate(ans_pos_sents_iter):
                 
-        for i in range(len(answer_pos_sents)):
-            backtrack = i - 2 if i >= 2 else 0
-            NNS = [] #they, them
-            NNP = [] #he , she, the, him , her ,
-            NN = [] #it
-            for j in (range(backtrack,i) if backtrack != i else [0] ):
-                ans_pos_sents_iter = answer_pos_sents[j].__iter__()
-                for ndx , tuple_ in enumerate(ans_pos_sents_iter):
-                    
-                    skip, group = check_for_group(answer_pos_sents[j][ndx:])
+                skip, group = check_for_group(answer_pos_sents[j][ndx:])
 
-                    if group:
-                        NNS.append(group)
-                        doc_meta_NNS.append(group)
-                        #print(group)
-                        consume(ans_pos_sents_iter,i)
+                if group:
+                    NNS.append(group)
+                    doc_meta_NNS.append(group)
+                    #print(group)
+                    consume(ans_pos_sents_iter,i)
 
-                    if ndx != 0 and answer_pos_sents[j][ndx-1][1] == 'DT':
-                        dt = answer_pos_sents[j][ndx-1][0]+' '
-                    else:
-                        dt = ''   
+                if ndx != 0 and answer_pos_sents[j][ndx-1][1] == 'DT':
+                    dt = answer_pos_sents[j][ndx-1][0]+' '
+                else:
+                    dt = ''   
 
-                    if tuple_[1] == 'NNS':
-                        NNS.append(dt+tuple_[0])
-                        doc_meta_NNS.append(dt+tuple_[0])
+                if tuple_[1] == 'NNS':
+                    NNS.append(dt+tuple_[0])
+                    doc_meta_NNS.append(dt+tuple_[0])
 
-                    elif tuple_[1] == 'NNP':
-                        NNP.append(dt+tuple_[0])
-                        doc_meta_NNP.append(dt+tuple_[0])
+                elif tuple_[1] == 'NNP':
+                    NNP.append(dt+tuple_[0])
+                    doc_meta_NNP.append(dt+tuple_[0])
 
-                    elif tuple_[1] == 'NN':    
-                        NN.append(dt+tuple_[0])
-                        doc_meta_NN.append(dt+tuple_[0])
+                elif tuple_[1] == 'NN':    
+                    NN.append(dt+tuple_[0])
+                    doc_meta_NN.append(dt+tuple_[0])
 
-            
-            NNS_mf = most_freq(NNS,doc_meta_NNS)
-            NN_mf = most_freq(NN,doc_meta_NN)
-            NNP_mf = most_freq(NNP,doc_meta_NNP)
-            
-            
-            for index in range(len(answer_pos_sents[i])):
-                if  answer_pos_sents[i][index][1] in ['PRP$','PRP']:
-                    if answer_pos_sents[i][index][1] == 'PRP$':
-                        pssv = "'s"
-                    else:
-                        pssv = ''
-                    prn = answer_pos_sents[i][index][0].lower()
-                    if prn in ['he','she','his','her','hers']:
+        
+        NNS_mf = most_freq(NNS,doc_meta_NNS)
+        NN_mf = most_freq(NN,doc_meta_NN)
+        NNP_mf = most_freq(NNP,doc_meta_NNP)
+        
+        
+        for index in range(len(answer_pos_sents[i])):
+            if  answer_pos_sents[i][index][1] in ['PRP$','PRP']:
+                if answer_pos_sents[i][index][1] == 'PRP$':
+                    pssv = "'s"
+                else:
+                    pssv = ''
+                prn = answer_pos_sents[i][index][0].lower()
+                if prn in ['he','she','his','her','hers']:
 
-                        slct1 = check_agreement(NNP_mf,prn,prev_dict)
+                    slct1 = check_agreement(NNP_mf,prn,prev_dict)
 
-                        answer_pos_sents[i][index] = (slct1+pssv if slct1 else answer_pos_sents[i][index][0],\
-                                                     'NNP' if slct1 else  answer_pos_sents[i][index][1])
+                    answer_pos_sents[i][index] = (slct1+pssv if slct1 else answer_pos_sents[i][index][0],\
+                                                 'NNP' if slct1 else  answer_pos_sents[i][index][1])
 
 
-                    elif prn in ['they','their','theirs','them']:
+                elif prn in ['they','their','theirs','them']:
 
-                        slct2 = check_agreement(NNS_mf,prn,prev_dict)
+                    slct2 = check_agreement(NNS_mf,prn,prev_dict)
 
-                        answer_pos_sents[i][index] = (slct2+pssv if slct2 else answer_pos_sents[i][index][0],\
-                                                    'NNS' if slct2 else  answer_pos_sents[i][index][1])
+                    answer_pos_sents[i][index] = (slct2+pssv if slct2 else answer_pos_sents[i][index][0],\
+                                                'NNS' if slct2 else  answer_pos_sents[i][index][1])
 
-                    elif prn in ['it','one']:
+                elif prn in ['it','one']:
 
-                        slct3 = check_agreement(NN_mf,prn,prev_dict)
+                    slct3 = check_agreement(NN_mf,prn,prev_dict)
 
-                        answer_pos_sents[i][index] = (slct3+pssv if slct3 else answer_pos_sents[i][index][0],\
-                                                     'NN' if slct3 else  answer_pos_sents[i][index][1])
-                    else:
-                        answer_pos_sents[i][index] = (answer_pos_sents[i][index][0],\
-                                                      answer_pos_sents[i][index][1])
+                    answer_pos_sents[i][index] = (slct3+pssv if slct3 else answer_pos_sents[i][index][0],\
+                                                 'NN' if slct3 else  answer_pos_sents[i][index][1])
+                else:
+                    answer_pos_sents[i][index] = (answer_pos_sents[i][index][0],\
+                                                  answer_pos_sents[i][index][1])
             
     ans = ''
 
