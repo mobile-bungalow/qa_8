@@ -80,7 +80,7 @@ def get_similarity(skw,qkw,sid,qid):
     for word in qkw:
         hit = 0
         syn_list = wn.synsets(word)
-        if len(syn_list) == 1 or len(syn_list) == 2:
+        if len(syn_list) == 1:
             senses += [syn_list[0]]
             syn_list = []
             hit = 1
@@ -105,7 +105,7 @@ def get_similarity(skw,qkw,sid,qid):
     for word in qkw:
         hit = 0
         syn_list = wn.synsets(word)
-        if len(syn_list) == 1 or len(syn_list) == 2:
+        if len(syn_list) == 1:
             s_senses += [syn_list[0]]
             syn_list = []
             hit = 1
