@@ -98,8 +98,6 @@ def wn_extract(question, sentence, sent_index, sch_flag = False):
     dep_set = set(i for i in find_main(dep[sent_index])['deps'].keys())
     q_dep_set = set([i for i in qnode['deps']] + [qnode['rel']]  )
     union = q_dep_set & dep_set
-    #print(q_dep_set , '  DEP SET : ', dep_set , 'Intersect   :  ', q_dep_set & dep_set)
-
     #generalized way to extract plausible answer types from  the graph
     #currently probably a problem
 
@@ -113,6 +111,7 @@ def wn_extract(question, sentence, sent_index, sch_flag = False):
     if 'punct' in answer_type:
         answer_type.remove('punct')
 
+    #answer_type = ['advmod','iobj','dobj']
     qmain = find_main(qgraph)
 
     qword = qmain["word"]
@@ -143,11 +142,6 @@ def wn_extract(question, sentence, sent_index, sch_flag = False):
                 if node['rel'] in answer_type:
                     deps = get_dependents(node, sgraph)
                     deps = sorted(deps+[node], key=operator.itemgetter("address"))
-                    print('\n')
-                    print( 'ANSWER : ', question['text']," : ", " ".join(dep["word"] for dep in deps))
-                    print('ANS Q REL UNION :' ,  q_dep_set & dep_set )
-                    print('REL : ', node['rel'] , 'ANSWER TYPE :' , answer_type)
-                    print('\n')
                     return " ".join(depo["word"] for depo in deps)       
 
     return None
@@ -609,6 +603,11 @@ def get_answer(question,story,sch_flag=False):
 
     sch_flag = 'Sch' in question['type']
 
+    whole = nltk.word_tokenize(question['text'])
+
+    if not any(qflags[key] for key in qflags):
+        for i in whole:
+            qflags = utils.get_flags(i)
 
     if qflags['who']:
         
@@ -616,10 +615,10 @@ def get_answer(question,story,sch_flag=False):
         #resolve anaphora if necesary
         #similarity overlap , fallback to word overlap
 
-        #answer , i = who_baseline(question,story,sch_flag=sch_flag)
-        #best_dep = wn_extract(question,story,i,sch_flag=sch_flag)
-        #answer = (best_dep if best_dep else answer)#'next code'
-        answer = 'next code'
+        answer , i = who_baseline(question,story,sch_flag=sch_flag)
+        best_dep = wn_extract(question,story,i,sch_flag=sch_flag)
+        answer = (best_dep if best_dep else answer)#'next code'
+        #answer = 'next code'
 
     elif qflags['what']:
 
@@ -627,59 +626,59 @@ def get_answer(question,story,sch_flag=False):
         # select sentence with similarity overlap as a first choice 
         # failing onto word overlap of sch if possible
 
-        #return_type = utils.return_type(question)
+        return_type = utils.return_type(question)
 
-        #answer , i = what_baseline(question,story,return_type,sch_flag=sch_flag)
-        #best_dep = wn_extract(question,story,i,sch_flag=sch_flag)
-        #answer =(best_dep if best_dep else answer)
-        answer = 'next code'
+        answer , i = what_baseline(question,story,return_type,sch_flag=sch_flag)
+        best_dep = wn_extract(question,story,i,sch_flag=sch_flag)
+        answer =(best_dep if best_dep else answer)
+        #answer = 'next code'
 
     elif qflags['when']:
 
-        #kw_adds = ['Saturday','Sunday','Monday','Tuesday','Wednesday','Thursday','Friday']
-        #kw_adds += pp_filter
-        #answer , i = when_baseline(question,story,kw_adds,sch_flag,)
-        #best_dep = wn_extract(question,story,i,sch_flag=sch_flag)
-        #answer = (best_dep if best_dep else answer)#'next code'
-        answer = 'next code'
+        kw_adds = ['Saturday','Sunday','Monday','Tuesday','Wednesday','Thursday','Friday']
+        kw_adds += pp_filter
+        answer , i = when_baseline(question,story,kw_adds,sch_flag,)
+        best_dep = wn_extract(question,story,i,sch_flag=sch_flag)
+        answer = (best_dep if best_dep else answer)#'next code'
+        #answer = 'next code'
     elif qflags['why']:
 
         #add why answer triggers to the question when looking for overlap
 
-        #kw_adds = why_filter
-        #answer , i = when_baseline(question,story,kw_adds,sch_flag)
-        #best_dep = wn_extract(question,story,i,sch_flag=sch_flag)
-        #answer = (best_dep if best_dep else answer)#'next code'
-        answer = 'next code'
+        kw_adds = why_filter
+        answer , i = when_baseline(question,story,kw_adds,sch_flag)
+        best_dep = wn_extract(question,story,i,sch_flag=sch_flag)
+        answer = (best_dep if best_dep else answer)#'next code'
+        #answer = 'next code'
 
     elif qflags['where']:
 
         kw_adds = ['in','where','at','front','back','outside','inside']
-        #answer , i = when_baseline(question,story,kw_adds,sch_flag=sch_flag)
-        #best_dep = wn_extract(question,story,i,sch_flag=sch_flag)
-        #answer = (best_dep if best_dep else answer)
+        answer , i = when_baseline(question,story,kw_adds,sch_flag=sch_flag)
+        best_dep = wn_extract(question,story,i,sch_flag=sch_flag)
+        answer = (best_dep if best_dep else answer)
         answer = 'next code'
 
     elif qflags['which']:
         #question reformation
-        #kw_adds = []
-        #answer , i = when_baseline(question,story,kw_adds,sch_flag)
-        #best_dep = wn_extract(question,story,i)
-        #answer = (best_dep if best_dep else answer)
-        answer = 'next code'
+        kw_adds = []
+        answer , i = when_baseline(question,story,kw_adds,sch_flag)
+        best_dep = wn_extract(question,story,i)
+        answer = (best_dep if best_dep else answer)
+        #answer = 'next code'
     elif qflags['did']:
         #question reformation
         #simple overlap , look for 'nt in answer, make a score threshold
         #based on the number of key words
 
-        #kw_adds = []
-        #answer , i = when_baseline(question,story,kw_adds,sch_flag=sch_flag)
-        #answer = 'next code'
-        #best_dep = wn_extract(question,story,i)
-        #answer = (best_dep if best_dep else answer)
-        #answer = 'yes' if "'nt" not in answer else 'no' 
-        
+        kw_adds = []
+        answer , i = when_baseline(question,story,kw_adds,sch_flag=sch_flag)
         answer = 'next code'
+        best_dep = wn_extract(question,story,i)
+        answer = (best_dep if best_dep else answer)
+        answer = 'yes' if "'nt" not in answer else 'no' 
+        
+        #answer = 'next code'
     elif qflags['how']:
         #resovle whether adj or verb gerund return type
 
@@ -690,13 +689,12 @@ def get_answer(question,story,sch_flag=False):
     else:
         #dialogues questions
         #seriously word overlap
-        #just get the sentence then question reformation
-        print(question['text'])
+        #just get the sentence then question reformation       
         kw_adds = []
-        #answer , i = when_baseline(question,story,kw_adds,sch_flag=sch_flag)
+        answer , i = when_baseline(question,story,kw_adds,sch_flag=sch_flag)
         answer = 'next code'
-        #best_dep = wn_extract(question,story,i)
-        #answer = (best_dep if best_dep else answer)
+        best_dep = wn_extract(question,story,i)
+        answer = (best_dep if best_dep else answer)
         #answer = 'next code'
     
     return answer
