@@ -187,7 +187,7 @@ def find_similar(word, word_pos, graph, filename):
                 sets = wn.synsets(node['word'])
                 for item in sets:
                     path_sim = wn.path_similarity(item,wn_word)
-                    if path_sim and path_sim > 0.6:
+                    if path_sim and path_sim > 0.32:
                         return node
                 node_lemma = lmtzr.lemmatize(node['word'],penn2wn(node['tag'])).lower()
                 word_lemma = lmtzr.lemmatize(word,penn2wn(word_pos)).lower()
@@ -484,11 +484,13 @@ def who_baseline(question,story,sch_flag=False):
         words = nltk.word_tokenize(sents[i])
         words_pos = nltk.pos_tag(words)
         words = list(filter(lambda x: x not in (stop_words + [':','`','’',',','.','!',"'",'"','?']), words))
-
+        sim_score = utils.get_similarity(list(set(words)),list(set(keywords)),story['sid'],question['qid'])
         words = list(map(lambda x: lmtzr.lemmatize(x[0], pos=penn2wn(x[1])), words_pos))
-             
-        quant = len(set(words) & set(keywords))
 
+        quant = len(set(words) & set(keywords))
+        
+        if sim_score:
+            quant += sim
 
         eligible_sents.append((quant,text_actual[i],i))
 
@@ -537,10 +539,13 @@ def what_baseline(question,story,return_type,sch_flag=False):
         words = nltk.word_tokenize(sents[i])
         words_pos = nltk.pos_tag(words)
         words = list(filter(lambda x: x not in (stop_words_cust + [':','’',',','.','!',"'",'"','?']), words))
+        sim_score = utils.get_similarity(list(set(words)),list(set(keywords)),story['sid'],question['qid'])
         words = list(map(lambda x: lmtzr.lemmatize(x[0], pos=penn2wn(x[1])), words_pos))
                 
-        quant = len(set(words) & set(keywords))
         
+        quant = len(set(words) & set(keywords))
+        if sim_score:
+            quant += sim_score
         eligible_sents.append((quant,text_actual[i],i))
 
     eligible_sents = sorted(eligible_sents, key=operator.itemgetter(0), reverse=True)
@@ -578,10 +583,19 @@ def when_baseline(question,story,kw_adds,sch_flag=False):
         words = nltk.word_tokenize(sents[i])
         words_pos = nltk.pos_tag(words)
         words = list(filter(lambda x: x not in (stop_words + [':','`','’',',','.','!',"'",'"','?']), words))
-
+        sim_score = utils.get_similarity(list(set(words)),list(set(keywords)),story['sid'],question['qid'])   
+        
         words = list(map(lambda x: lmtzr.lemmatize(x[0], pos=penn2wn(x[1])), words_pos))
              
         quant = len(set(words) & set(keywords))
+
+        if sim_score:
+            quant += sim_score
+            #joint = (set(words) & set(keywords))
+            #disjointq = (set(words)-joint) 
+            #disjoints =  (set(keywords)- joint)
+            #print('\n Question DJ Set : ',disjointq,'\n Sent DJ Set : ',disjoints)
+
 
         eligible_sents.append((quant,text_actual[i],i))
 
@@ -657,8 +671,7 @@ def get_answer(question,story,sch_flag=False):
         answer , i = when_baseline(question,story,kw_adds,sch_flag=sch_flag)
         best_dep = wn_extract(question,story,i,sch_flag=sch_flag)
         answer = (best_dep if best_dep else answer)
-        answer = 'next code'
-
+        
     elif qflags['which']:
         #question reformation
         kw_adds = []
@@ -673,7 +686,6 @@ def get_answer(question,story,sch_flag=False):
 
         kw_adds = []
         answer , i = when_baseline(question,story,kw_adds,sch_flag=sch_flag)
-        answer = 'next code'
         best_dep = wn_extract(question,story,i)
         answer = (best_dep if best_dep else answer)
         answer = 'yes' if "'nt" not in answer else 'no' 
@@ -692,7 +704,6 @@ def get_answer(question,story,sch_flag=False):
         #just get the sentence then question reformation       
         kw_adds = []
         answer , i = when_baseline(question,story,kw_adds,sch_flag=sch_flag)
-        answer = 'next code'
         best_dep = wn_extract(question,story,i)
         answer = (best_dep if best_dep else answer)
         #answer = 'next code'

@@ -76,7 +76,9 @@ def get_similarity(skw,qkw,sid,qid):
     senses = []
     senses += bis
     senses += tris
-    
+    mid = (set(qkw)&set(skw))
+    for i in mid:
+        qkw.remove(i)
     for word in qkw:
         hit = 0
         syn_list = wn.synsets(word)
@@ -101,8 +103,9 @@ def get_similarity(skw,qkw,sid,qid):
     s_senses = []
     s_senses += bis
     s_senses += tris
-    
-    for word in qkw:
+    for i in mid:
+        skw.remove(i)
+    for word in skw:
         hit = 0
         syn_list = wn.synsets(word)
         if len(syn_list) == 1:
@@ -122,22 +125,29 @@ def get_similarity(skw,qkw,sid,qid):
     if len(s_senses) == 0:
         return None
 
-
-    quant = len(set(skw) & set(qkw))
     mod = float(0)
+  
     for q_set in senses:
-        l = [wn.path_similarity(i,q_set) for i in s_senses]
-        #lt =  [(wn.path_similarity(i,q_set),i,q_set) for i in s_senses]
-        #if lt[0]
-        #print(lt)
-        if None not in l:
+        l = []
+        maximum = 0.0
+        for keyword in s_senses:
+            a = wn.path_similarity(keyword,q_set)
+            l.append(a)
+            #lt =  [(wn.path_similarity(i,q_set),i,q_set) for i in s_senses]
+            #if lt[0]
+            #print(lt)
+            while None in l:
+                l.remove(None)
+            
+        if len(l) > 0:
             maximum = max(l)
         else:
             maximum = float(0)
-        mod += maximum
-        maximum = 0.0
-
-    #print(skw, "     , qkw :", qkw ,'    :    ',mod)
+        if maximum > 0.32:
+            mod += 1.0
+                
+    #if mod > 0.0 :
+        #print('\n Q KW WN SSYNSETS: ',senses,'\n S KW WN SYNSETS:',s_senses,'\n MODIFIER: ', mod)
     return mod
 
 prn_map = {'her':'female','hers':'female','she':'female','herself':'female',
